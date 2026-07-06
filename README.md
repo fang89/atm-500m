@@ -5,7 +5,7 @@ DBS/POSB cash point, against the banking industry's commitment (ABS, 25 Jun 2026
 to put an ATM, bank branch or NETS cashpoint within 500 m of every HDB block by
 end-2027.
 
-**Live dashboard:** `docs/index.html` (serve statically; see Deploy below)
+**Live dashboard:** https://fang89.github.io/atm-500m/
 
 ## Headline findings (as of the generated date in the dashboard)
 
@@ -20,6 +20,8 @@ NETS cashpoints). This project maps only the DBS/POSB network, so it
 *underestimates* actual coverage — a "gap" block here may already be served by
 another bank or a NETS cashpoint. Distances are straight-line, per the ABS
 release's own definition.
+
+**Full methodology, definitions and limitations: [METHODOLOGY.md](METHODOLOGY.md)**
 
 ## Repo layout
 
