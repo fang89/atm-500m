@@ -123,7 +123,6 @@ This map shows how far every HDB block is from the nearest <b>DBS/POSB</b> cash 
   </span>
   <label><input type="checkbox" id="fBranch" checked> count branches as coverage</label>
   <label><input type="checkbox" id="fCircles"> ATM 500&#8202;m circles</label>
-  <label><input type="checkbox" id="fOnlyGaps"> show gap blocks only</label>
   <label>area <select id="fArea"><option value="">all</option></select></label>
 </div>
 
@@ -183,7 +182,7 @@ $('#themeBtn').onclick = () => {
 /* ---------- state ---------- */
 let BLOCKS = [], ATMS = [], SUM = {};
 // block row: [postal, blk, lat, lon, dAtm, dAny, street, town, units, nearestName]
-const S = { mode:'status', useBranch:true, circles:false, onlyGaps:false, area:'' };
+const S = { mode:'status', useBranch:true, circles:false, area:'' };
 
 const AREA = p => {
   const s = (p||'').slice(0,2);
@@ -248,7 +247,6 @@ function drawBlocks(){
   blockLayer.clearLayers();
   for (const b of BLOCKS){
     if (S.area && AREA(b[0]) !== S.area) continue;
-    if (S.onlyGaps && !isGap(b)) continue;
     if (S.mode === 'status' && dist(b) <= 400) continue; // covered blocks stay invisible
     const st = blockStyle(b);
     const m = L.circleMarker([b[2], b[3]], {radius:st.r, stroke:false,
@@ -402,7 +400,6 @@ $('#modeSeg').addEventListener('click', e=>{
 });
 $('#fBranch').onchange = e=>{ S.useBranch = e.target.checked; setTiles(); drawBlocks(); drawCharts(); drawLegend(); };
 $('#fCircles').onchange = e=>{ S.circles = e.target.checked; drawCircles(); };
-$('#fOnlyGaps').onchange = e=>{ S.onlyGaps = e.target.checked; drawBlocks(); };
 $('#fArea').onchange = e=>{ S.area = e.target.value; drawBlocks(); zoomArea(); };
 
 /* ---------- boot ---------- */
