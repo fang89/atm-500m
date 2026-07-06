@@ -194,52 +194,65 @@ def load_enrichment():
     return enr
 
 
+def load_cashpoints():
+    path = os.path.join(DATA, "cashpoints.json")
+    return json.load(open(path)) if os.path.exists(path) else []
+
+
 def main():
     atms = load_atms()
-    cash = [(a["lat"], a["lon"]) for a in atms if a["cat"] == "atm"]
-    cash_any = [(a["lat"], a["lon"]) for a in atms if a["cat"] in ("atm", "branch")]
+    cashpoints = load_cashpoints()
+    pts_a = [(a["lat"], a["lon"]) for a in atms if a["cat"] == "atm"]
+    pts_ab = [(a["lat"], a["lon"]) for a in atms if a["cat"] in ("atm", "branch")]
+    pts_c = [(c["lat"], c["lon"]) for c in cashpoints]
     names_atm = [a for a in atms if a["cat"] == "atm"]
-    names_any = [a for a in atms if a["cat"] in ("atm", "branch")]
-    print(f"{len(atms)} locations: {len(cash)} ATM sites, "
-          f"{len(cash_any)-len(cash)} branches, "
-          f"{sum(1 for a in atms if a['cat']=='other')} other", flush=True)
+    print(f"{len(atms)} DBS locations: {len(pts_a)} ATM sites, "
+          f"{len(pts_ab)-len(pts_a)} branches; {len(pts_c)} cashpoints", flush=True)
 
-    grid_atm, grid_any = Grid(cash), Grid(cash_any)
+    grid_a, grid_ab = Grid(pts_a), Grid(pts_ab)
+    grid_ac, grid_abc = Grid(pts_a + pts_c), Grid(pts_ab + pts_c)
     blocks = load_blocks()
     enr = load_enrichment()
     print(f"{len(blocks)} HDB blocks, enrichment for {len(enr)}", flush=True)
 
-    out_blocks, gaps = [], 0
+    out_blocks = []
     for blk, lat, lon, postal in blocks:
-        d_atm, i_atm = grid_atm.nearest(lat, lon)
-        d_any, _ = grid_any.nearest(lat, lon)
+        d_a, i_atm = grid_a.nearest(lat, lon)
+        d_ab, _ = grid_ab.nearest(lat, lon)
+        d_ac, _ = grid_ac.nearest(lat, lon)
+        d_abc, _ = grid_abc.nearest(lat, lon)
         street, town, units = enr.get(postal, ("", "", 0))
-        if d_any > 500:
-            gaps += 1
         out_blocks.append([
             postal, blk, round(lat, 6), round(lon, 6),
-            round(d_atm), round(d_any),
+            round(d_a), round(d_ab),
             street, town, units,
             names_atm[i_atm]["name"] if i_atm >= 0 else "",
+            round(d_ac), round(d_abc),
         ])
 
     n = len(out_blocks)
-    over_atm = sum(1 for b in out_blocks if b[4] > 500)
-    over_any = sum(1 for b in out_blocks if b[5] > 500)
+    over = {k: sum(1 for b in out_blocks if b[i] > 500)
+            for k, i in [("atm", 4), ("atm_or_branch", 5),
+                         ("atm_or_cashpoint", 10), ("all", 11)]}
     summary = {
         "generated": __import__("datetime").date.today().isoformat(),
         "blocks": n,
-        "atm_sites": len(cash),
-        "branches": len(cash_any) - len(cash),
-        "blocks_over_500m_atm": over_atm,
-        "blocks_over_500m_atm_or_branch": over_any,
-        "pct_covered_atm": round(100 * (n - over_atm) / n, 1),
-        "pct_covered_any": round(100 * (n - over_any) / n, 1),
+        "atm_sites": len(pts_a),
+        "branches": len(pts_ab) - len(pts_a),
+        "cashpoints": len(pts_c),
+        "blocks_over_500m_atm": over["atm"],
+        "blocks_over_500m_atm_or_branch": over["atm_or_branch"],
+        "blocks_over_500m_atm_or_cashpoint": over["atm_or_cashpoint"],
+        "blocks_over_500m_all": over["all"],
+        "pct_covered_atm": round(100 * (n - over["atm"]) / n, 1),
+        "pct_covered_any": round(100 * (n - over["atm_or_branch"]) / n, 1),
+        "pct_covered_all": round(100 * (n - over["all"]) / n, 1),
         "median_dist_atm": sorted(b[4] for b in out_blocks)[n // 2],
         "p90_dist_atm": sorted(b[4] for b in out_blocks)[int(n * 0.9)],
         "max_dist_atm": max(b[4] for b in out_blocks),
     }
     json.dump(atms, open(os.path.join(OUT, "atms.json"), "w"))
+    json.dump(cashpoints, open(os.path.join(OUT, "cashpoints.json"), "w"))
     json.dump(out_blocks, open(os.path.join(OUT, "blocks.json"), "w"))
     json.dump(summary, open(os.path.join(OUT, "summary.json"), "w"), indent=1)
     print(json.dumps(summary, indent=1), flush=True)

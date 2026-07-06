@@ -37,6 +37,7 @@ an upper bound on the true number of gap blocks).
 | HDB block locations | [HDB Existing Building](https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view) (GeoJSON, data.gov.sg) | dataset last updated Apr 2026 |
 | Block attributes (street, town, dwelling units) | [HDB Property Information](https://data.gov.sg/datasets/d_17f5382f26140b1fdae0ba2ef6239d2f/view) (data.gov.sg) + [OneMap](https://www.onemap.gov.sg/) geocoding | fetched at generation date |
 | DBS/POSB ATMs & branches | DBS branch-locator content API (the same data behind [dbs.com.sg's locator](https://www.dbs.com.sg/index/locator.page)) | fetched at generation date |
+| NETS cashpoints (DBS/POSB Cash-Point merchants) | NEA licensed-supermarkets register (data.gov.sg) + OpenStreetMap (Overpass API) | fetched at generation date |
 
 The generation date is shown in the dashboard footer and stored in
 `docs/data/summary.json`.
@@ -92,7 +93,34 @@ both counts once in each layer). Locations are deduplicated on rounded
 coordinates + category. The dashboard's default "coverage" definition is
 ATM-or-branch; a toggle restricts it to ATMs only.
 
-### 2.3 Optional enrichment (`scripts/fetch_hdb_blocks.py`)
+### 2.3 Cashpoints (`scripts/fetch_cashpoints.py`)
+
+The ABS release (footnote 2) defines a cashpoint as *"a participating merchant
+that enables a customer of a Singapore bank to withdraw cash using their bank
+ATM or debit card while making a purchase via NETS"* — i.e. cash-back at the
+till; a purchase is required and per-merchant limits apply.
+
+For the DBS/POSB scheme specifically,
+[posb.com.sg](https://www.posb.com.sg/personal/deposits/bank-with-ease/cash-point)
+lists (as of Jul 2026): **7-Eleven, Giant, Cold Storage, Jasons Deli** (withdraw
+up to S$200) and **Guardian, buzz** (up to S$100), excluding Changi Airport
+outlets. Sheng Siong, Haomart and U Stars left the scheme on 1 Nov 2025.
+
+Outlet locations:
+
+- **Giant / Cold Storage / Jasons** — NEA's licensed-supermarkets register on
+  data.gov.sg (authoritative, licence-level), geocoded by postal code via OneMap.
+- **7-Eleven / Guardian** — OpenStreetMap via the Overpass API (© OSM
+  contributors, ODbL). 7-Eleven coverage in OSM Singapore is good (330+ of
+  ~450 outlets); **Guardian is poorly mapped (~11 outlets)**, so
+  cashpoint-inclusive coverage is still slightly understated.
+- **buzz** kiosks (a handful of SingPost pods) are omitted.
+
+Cashpoints are a *dashboard toggle, off by default*: they are a different kind
+of access (purchase required, store hours, cash-availability dependent), so the
+default view sticks to unconditional cash access (ATMs/branches).
+
+### 2.4 Optional enrichment (`scripts/fetch_hdb_blocks.py`)
 
 To display street names, towns and dwelling-unit counts, the HDB Property
 Information dataset (12,000+ rows of `blk_no` + `street` + attributes, no
@@ -126,8 +154,10 @@ straight-line-vs-walk effects make blocks near the threshold ambiguous.
 
 ## 4. Known limitations
 
-1. **DBS/POSB only.** No OCBC/UOB ATMs, no NETS cashpoints ⇒ coverage is
-   understated; gap counts are an upper bound (see §1).
+1. **DBS/POSB only.** No OCBC/UOB ATMs ⇒ coverage is understated; gap counts
+   are an upper bound (see §1). Cashpoints are included as an optional toggle
+   (§2.3) but Guardian outlets are under-represented and OCBC/UOB-side
+   cashpoint schemes are out of scope.
 2. **Straight-line ≠ walking distance.** A block 480 m from an ATM across a
    canal or expressway is "covered" by the commitment's own definition but not
    in lived experience. (This cuts the other way from limitation 1.)

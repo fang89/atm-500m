@@ -12,7 +12,7 @@
   --surface-1:#fcfcfb; --page:#f9f9f7;
   --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
   --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
-  --s-atm:#2a78d6; --s-branch:#1baf7a;
+  --s-atm:#2a78d6; --s-branch:#1baf7a; --s-cash:#eda100;
   --seq-100:#cde2fb; --seq-250:#86b6ef; --seq-400:#3987e5; --seq-550:#1c5cab; --seq-700:#0d366b;
   --st-serious:#ec835a; --st-critical:#d03b3b;
   --blk-covered:#b3b1a9;
@@ -22,7 +22,7 @@
   --surface-1:#1a1a19; --page:#0d0d0d;
   --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
   --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
-  --s-atm:#3987e5; --s-branch:#199e70;
+  --s-atm:#3987e5; --s-branch:#199e70; --s-cash:#c98500;
   --seq-100:#0d366b; --seq-250:#184f95; --seq-400:#256abf; --seq-550:#5598e7; --seq-700:#9ec5f4;
   --blk-covered:#55554f;
 }
@@ -31,7 +31,7 @@
     --surface-1:#1a1a19; --page:#0d0d0d;
     --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
     --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
-    --s-atm:#3987e5; --s-branch:#199e70;
+    --s-atm:#3987e5; --s-branch:#199e70; --s-cash:#c98500;
     --seq-100:#0d366b; --seq-250:#184f95; --seq-400:#256abf; --seq-550:#5598e7; --seq-700:#9ec5f4;
     --blk-covered:#55554f;
   }
@@ -122,6 +122,7 @@ This map shows how far every HDB block is from the nearest <b>DBS/POSB</b> cash 
     <button data-m="status" class="on">Gaps</button><button data-m="heat">Distance heat</button>
   </span>
   <label><input type="checkbox" id="fBranch" checked> count branches as coverage</label>
+  <label title="NETS cash-back at 7-Eleven, Giant, Cold Storage, Jasons Deli & Guardian"><input type="checkbox" id="fCash"> count cashpoints (7-Eleven & co.)</label>
   <label><input type="checkbox" id="fCircles"> ATM 500&#8202;m circles</label>
   <label>area <select id="fArea"><option value="">all</option></select></label>
 </div>
@@ -155,6 +156,7 @@ This map shows how far every HDB block is from the nearest <b>DBS/POSB</b> cash 
     <li>Straight-line ≠ walking distance: 500&#8202;m as the crow flies can be a much longer walk (roads, canals, expressways).</li>
     <li>HDB blocks: <a href="https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view">HDB Existing Building</a> footprints (data.gov.sg), building centroids; includes all HDB buildings (some are carparks/commercial).</li>
     <li>ATM/branch locations: DBS branch-locator public content API; "ATM" = cash-withdrawal machines (ATM, talking ATM, cash recycler). Deposit-only machines and AXS kiosks are excluded.</li>
+    <li><b>Cashpoints</b> (toggle, off by default): NETS cash-back with a purchase at DBS/POSB Cash-Point merchants — 7-Eleven, Giant, Cold Storage, Jasons Deli (up to S$200) and Guardian (up to S$100), per <a href="https://www.posb.com.sg/personal/deposits/bank-with-ease/cash-point">posb.com.sg</a>; Changi Airport outlets excluded, buzz kiosks omitted. Supermarket locations from NEA's licensed-supermarket register (data.gov.sg); 7-Eleven and Guardian outlets from © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL) — community-mapped, so a few outlets may be missing or stale.</li>
     <li>Generated <span id="genDate"></span>. Code, data &amp; <a href="https://github.com/fang89/atm-500m/blob/main/METHODOLOGY.md">methodology</a>: <a id="repoLink" href="https://github.com/fang89/atm-500m">GitHub</a>.</li>
   </ul>
 </div>
@@ -180,9 +182,10 @@ $('#themeBtn').onclick = () => {
 };
 
 /* ---------- state ---------- */
-let BLOCKS = [], ATMS = [], SUM = {};
-// block row: [postal, blk, lat, lon, dAtm, dAny, street, town, units, nearestName]
-const S = { mode:'status', useBranch:true, circles:false, area:'' };
+let BLOCKS = [], ATMS = [], CASH = [], SUM = {};
+// block row: [postal, blk, lat, lon, dAtm, dAtmBranch, street, town, units,
+//             nearestName, dAtmCash, dAll]
+const S = { mode:'status', useBranch:true, useCash:false, circles:false, area:'' };
 
 const AREA = p => {
   const s = (p||'').slice(0,2);
@@ -190,11 +193,13 @@ const AREA = p => {
 };
 const SECTORS = {"01":"Raffles/Marina","02":"Raffles/Marina","03":"Raffles/Marina","04":"Harbourfront","05":"Harbourfront","06":"Raffles/Marina","07":"Bugis/Rochor","08":"Little India","09":"Orchard/River Valley","10":"Orchard/River Valley","11":"Chinatown/Outram","12":"Balestier/Toa Payoh","13":"Balestier/Toa Payoh","14":"Queenstown/Tiong Bahru","15":"Queenstown/Tiong Bahru","16":"Queenstown/Tiong Bahru","17":"Bukit Merah","18":"Bukit Merah","19":"Tanglin/Holland","20":"Ang Mo Kio/Bishan","21":"Clementi/West Coast","22":"Jurong","23":"Jurong","24":"Lim Chu Kang","25":"Kranji/Woodgrove","26":"Upper Thomson","27":"Yishun/Sembawang","28":"Seletar","29":"Novena/Thomson","30":"Novena/Thomson","31":"Toa Payoh/Serangoon","32":"Toa Payoh/Serangoon","33":"Toa Payoh/Serangoon","34":"Macpherson/Potong Pasir","35":"Macpherson/Potong Pasir","36":"Macpherson/Potong Pasir","37":"Macpherson/Potong Pasir","38":"Geylang/Eunos","39":"Geylang/Eunos","40":"Geylang/Eunos","41":"Geylang/Eunos","42":"Katong/Joo Chiat","43":"Katong/Joo Chiat","44":"Katong/Joo Chiat","45":"Katong/Joo Chiat","46":"Bedok/Upper East Coast","47":"Bedok/Upper East Coast","48":"Bedok/Upper East Coast","49":"Loyang/Changi","50":"Loyang/Changi","51":"Tampines/Pasir Ris","52":"Tampines/Pasir Ris","53":"Serangoon Gdn/Hougang","54":"Serangoon Gdn/Hougang","55":"Serangoon Gdn/Hougang","56":"Ang Mo Kio/Bishan","57":"Ang Mo Kio/Bishan","58":"Bukit Timah/Ulu Pandan","59":"Bukit Timah/Ulu Pandan","60":"Jurong","61":"Jurong","62":"Jurong","63":"Jurong","64":"Jurong","65":"Bukit Panjang/CCK","66":"Bukit Panjang/CCK","67":"Bukit Panjang/CCK","68":"Bukit Panjang/CCK","69":"Lim Chu Kang/Tengah","70":"Lim Chu Kang/Tengah","71":"Lim Chu Kang/Tengah","72":"Kranji/Woodgrove","73":"Kranji/Woodgrove","75":"Yishun/Sembawang","76":"Yishun/Sembawang","77":"Seletar","78":"Seletar","79":"Serangoon Gdn/Hougang","80":"Serangoon Gdn/Hougang","81":"Loyang/Changi","82":"Punggol/Sengkang"};
 
-const dist = b => S.useBranch ? b[5] : b[4];
+const dist = b => S.useBranch ? (S.useCash ? b[11] : b[5])
+                              : (S.useCash ? b[10] : b[4]);
 const isGap = b => dist(b) > 500;
+const covLabel = () => 'ATM' + (S.useBranch ? '/branch' : '') + (S.useCash ? '/cashpoint' : '');
 
 /* ---------- map ---------- */
-let map, tileLayer, blockLayer, atmLayer, circleLayer;
+let map, tileLayer, blockLayer, atmLayer, cashLayer, circleLayer;
 const TILES = {
   light:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'},
   dark:{url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'}
@@ -219,9 +224,25 @@ function initMap(){
   map = L.map('map', {preferCanvas:true}).setView([1.3521,103.8198], 12);
   tileLayer = L.tileLayer(TILES[curTheme()].url, {attribution:ATTR, maxZoom:19}).addTo(map);
   blockLayer = L.layerGroup().addTo(map);
+  cashLayer = L.layerGroup();
   atmLayer = L.layerGroup().addTo(map);
   circleLayer = L.layerGroup();
-  drawAtms(); drawBlocks();
+  drawAtms(); drawCash(); drawBlocks();
+}
+
+function drawCash(){
+  cashLayer.clearLayers();
+  if (!S.useCash){ map.removeLayer(cashLayer); return; }
+  const c = css('--s-cash');
+  for (const p of CASH){
+    L.circleMarker([p.lat, p.lon], {radius:4, color:'#fff', weight:1.2,
+        fillColor:c, fillOpacity:1})
+      .bindPopup(`<b>${p.name}</b>${p.addr ? '<br>' + p.addr : ''}` +
+        `<br><span style="color:${c}">●</span> NETS cashpoint (${p.chain}, up to S$${p.limit} with purchase)`)
+      .addTo(cashLayer);
+  }
+  cashLayer.addTo(map);
+  if (map.hasLayer(atmLayer)){ atmLayer.remove(); atmLayer.addTo(map); } // ATMs stay on top
 }
 
 function drawAtms(){
@@ -256,6 +277,7 @@ function drawBlocks(){
       (b[0] ? `<br>S(${b[0]}) · ${AREA(b[0])}` : '') +
       `<br>nearest ATM: <b>${fmt(b[4])} m</b>${b[9] ? ' — ' + b[9] : ''}` +
       (b[5] !== b[4] ? `<br>nearest ATM/branch: <b>${fmt(b[5])} m</b>` : '') +
+      (S.useCash && b[11] != null && b[11] !== b[5] ? `<br>incl. cashpoints: <b>${fmt(S.useBranch?b[11]:b[10])} m</b>` : '') +
       (isGap(b) ? `<br><span style="color:${css('--st-critical')}">▲ beyond the 500 m commitment</span>` : ''));
     m.addTo(blockLayer);
   }
@@ -265,7 +287,7 @@ function drawBlocks(){
 function drawCircles(){
   circleLayer.clearLayers();
   if (!S.circles){ map.removeLayer(circleLayer); return; }
-  const atmC = css('--s-atm'), brC = css('--s-branch');
+  const atmC = css('--s-atm'), brC = css('--s-branch'), caC = css('--s-cash');
   for (const a of ATMS){
     if (a.cat === 'other') continue;
     if (a.cat === 'branch' && !S.useBranch) continue;
@@ -273,27 +295,32 @@ function drawCircles(){
       color:a.cat==='branch'?brC:atmC, opacity:.35,
       fillColor:a.cat==='branch'?brC:atmC, fillOpacity:.07}).addTo(circleLayer);
   }
+  if (S.useCash) for (const p of CASH)
+    L.circle([p.lat, p.lon], {radius:500, weight:1, color:caC, opacity:.3,
+      fillColor:caC, fillOpacity:.05}).addTo(circleLayer);
   circleLayer.addTo(map);
 }
 
 function restyleMap(){
   tileLayer.setUrl(TILES[curTheme()].url);
-  drawAtms(); drawBlocks(); drawLegend();
+  drawAtms(); drawCash(); drawBlocks(); drawLegend();
 }
 
 function drawLegend(){
   const l = $('#legend');
+  const cashSw = S.useCash
+    ? `<span><span class="sw" style="background:${css('--s-cash')}"></span>cashpoint (NETS cash-back)</span>` : '';
   if (S.mode === 'heat'){
     l.innerHTML =
-      `<span><span class="ramp"></span>block: distance to nearest ${S.useBranch?'cash point':'ATM'} (0 → 900 m+)</span>` +
+      `<span><span class="ramp"></span>block: distance to nearest ${covLabel()} (0 → 900 m+)</span>` +
       `<span><span class="sw" style="background:${css('--s-atm')}"></span>DBS/POSB ATM</span>` +
-      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>`;
+      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>` + cashSw;
   } else {
     l.innerHTML =
       `<span><span class="sw" style="background:${css('--st-critical')}"></span>▲ block &gt;500 m (gap)</span>` +
       `<span><span class="sw" style="background:${css('--st-serious')}"></span>400–500 m (at the limit)</span>` +
       `<span><span class="sw" style="background:${css('--s-atm')}"></span>DBS/POSB ATM</span>` +
-      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>` +
+      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>` + cashSw +
       `<span style="color:var(--ink-3)">covered blocks (≤400 m) hidden — use “Distance heat” to see all</span>`;
   }
 }
@@ -306,8 +333,9 @@ function setTiles(){
   $('#tiles').innerHTML = [
     [fmt(BLOCKS.length), 'HDB blocks (all HDB buildings)'],
     [fmt(SUM.atm_sites), 'DBS/POSB ATM locations'],
-    [fmt(SUM.branches), 'DBS/POSB branches'],
-    [fmt(gaps), `blocks >500 m from ${S.useBranch?'ATM/branch':'an ATM'}`, gaps>0],
+    S.useCash ? [fmt(CASH.length), 'NETS cashpoints (DBS/POSB scheme)']
+              : [fmt(SUM.branches), 'DBS/POSB branches'],
+    [fmt(gaps), `blocks >500 m from ${covLabel()}`, gaps>0],
     [pct + '%', 'blocks within 500 m'],
     [fmt(dist(worst)) + ' m', `worst: Blk ${worst[1]} ${worst[6]||('S('+worst[0]+')')}`],
   ].map(([v,k,bad]) => `<div class="tile"><div class="v${bad?' bad':''}">${v}</div><div class="k">${k}</div></div>`).join('');
@@ -349,7 +377,7 @@ function drawHist(){
   el.querySelectorAll('rect').forEach(r=>{
     r.addEventListener('mousemove', e=>{
       const i = +r.dataset.i, lo = i*BIN, hi = lo+BIN;
-      showTT(`<b>${fmt(bins[i])}</b> blocks ${i===bins.length-1?`≥${lo}m`:`${lo}–${hi}m`} from nearest ${S.useBranch?'cash point':'ATM'}`, e.clientX, e.clientY);
+      showTT(`<b>${fmt(bins[i])}</b> blocks ${i===bins.length-1?`≥${lo}m`:`${lo}–${hi}m`} from nearest ${covLabel()}`, e.clientX, e.clientY);
     });
     r.addEventListener('mouseleave', hideTT);
   });
@@ -399,13 +427,15 @@ $('#modeSeg').addEventListener('click', e=>{
   drawBlocks(); drawLegend();
 });
 $('#fBranch').onchange = e=>{ S.useBranch = e.target.checked; setTiles(); drawBlocks(); drawCharts(); drawLegend(); };
+$('#fCash').onchange = e=>{ S.useCash = e.target.checked; setTiles(); drawCash(); drawBlocks(); drawCharts(); drawLegend(); drawCircles(); };
 $('#fCircles').onchange = e=>{ S.circles = e.target.checked; drawCircles(); };
 $('#fArea').onchange = e=>{ S.area = e.target.value; drawBlocks(); zoomArea(); };
 
 /* ---------- boot ---------- */
-Promise.all(['data/blocks.json','data/atms.json','data/summary.json'].map(u=>fetch(u).then(r=>r.json())))
-.then(([blocks, atms, sum])=>{
-  BLOCKS = blocks; ATMS = atms; SUM = sum;
+Promise.all(['data/blocks.json','data/atms.json','data/summary.json',
+             'data/cashpoints.json'].map(u=>fetch(u).then(r=>r.ok?r.json():[])))
+.then(([blocks, atms, sum, cash])=>{
+  BLOCKS = blocks; ATMS = atms; SUM = sum; CASH = cash;
   $('#genDate').textContent = sum.generated;
   const areas = [...new Set(BLOCKS.map(b=>AREA(b[0])))].sort();
   $('#fArea').innerHTML = '<option value="">all</option>' + areas.map(a=>`<option>${a}</option>`).join('');
