@@ -222,6 +222,7 @@ function blockStyle(b){
 
 function initMap(){
   map = L.map('map', {preferCanvas:true}).setView([1.3521,103.8198], 12);
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
   tileLayer = L.tileLayer(TILES[curTheme()].url, {attribution:ATTR, maxZoom:19}).addTo(map);
   blockLayer = L.layerGroup().addTo(map);
   cashLayer = L.layerGroup();
