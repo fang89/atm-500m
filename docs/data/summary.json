@@ -1,0 +1,13 @@
+{
+ "generated": "2026-07-06",
+ "blocks": 13436,
+ "atm_sites": 765,
+ "branches": 73,
+ "blocks_over_500m_atm": 708,
+ "blocks_over_500m_atm_or_branch": 707,
+ "pct_covered_atm": 94.7,
+ "pct_covered_any": 94.7,
+ "median_dist_atm": 243,
+ "p90_dist_atm": 443,
+ "max_dist_atm": 937
+}

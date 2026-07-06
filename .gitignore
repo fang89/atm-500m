@@ -1,0 +1,6 @@
+data/hdb_existing_building.geojson
+data/hdb_property_info.json
+data/hdb_geocode_cache.json
+data/dbs_raw.json
+data/*.log
+.DS_Store

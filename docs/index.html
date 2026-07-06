@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Singapore HDB × DBS/POSB ATM — 500m Coverage</title>
+<meta name="description" content="Which HDB blocks are more than 500m from the nearest DBS/POSB ATM? Interactive map of the ABS end-2027 cash-access commitment.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+:root{
+  --surface-1:#fcfcfb; --page:#f9f9f7;
+  --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,.10);
+  --s-atm:#2a78d6; --s-branch:#1baf7a;
+  --seq-100:#cde2fb; --seq-250:#86b6ef; --seq-400:#3987e5; --seq-550:#1c5cab; --seq-700:#0d366b;
+  --st-serious:#ec835a; --st-critical:#d03b3b;
+  --tile-filter:none;
+}
+:root[data-theme="dark"]{
+  --surface-1:#1a1a19; --page:#0d0d0d;
+  --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+  --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+  --s-atm:#3987e5; --s-branch:#199e70;
+  --seq-100:#0d366b; --seq-250:#184f95; --seq-400:#256abf; --seq-550:#5598e7; --seq-700:#9ec5f4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
+    --s-atm:#3987e5; --s-branch:#199e70;
+    --seq-100:#0d366b; --seq-250:#184f95; --seq-400:#256abf; --seq-550:#5598e7; --seq-700:#9ec5f4;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink-1);
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1200px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin-bottom:6px}
+h1{font-size:22px;margin:0;font-weight:700}
+.sub{color:var(--ink-2);font-size:14px;margin:2px 0 14px}
+.sub a{color:inherit}
+#themeBtn{margin-left:auto;border:1px solid var(--ring);background:var(--surface-1);
+  color:var(--ink-2);border-radius:8px;padding:4px 10px;font-size:13px;cursor:pointer}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.tile{background:var(--surface-1);border:1px solid var(--ring);border-radius:10px;padding:12px 14px}
+.tile .v{font-size:26px;font-weight:700;letter-spacing:-.01em}
+.tile .v.bad{color:var(--st-critical)}
+.tile .k{color:var(--ink-2);font-size:12.5px;margin-top:2px}
+
+.filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
+  background:var(--surface-1);border:1px solid var(--ring);border-radius:10px;
+  padding:10px 14px;margin-bottom:12px;font-size:13.5px;color:var(--ink-2)}
+.filters label{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.filters select{font:inherit;color:var(--ink-1);background:var(--surface-1);
+  border:1px solid var(--ring);border-radius:6px;padding:3px 6px}
+.seg{display:inline-flex;border:1px solid var(--ring);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--ink-2);padding:4px 10px;
+  font:inherit;font-size:13px;cursor:pointer}
+.seg button.on{background:var(--s-atm);color:#fff}
+
+#map{height:62vh;min-height:420px;border-radius:12px;border:1px solid var(--ring);
+  background:var(--surface-1)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;font-size:13px;
+  color:var(--ink-2);padding:10px 4px 0}
+.legend .sw{display:inline-block;width:11px;height:11px;border-radius:50%;
+  margin-right:6px;vertical-align:-1px;border:1px solid var(--ring)}
+.legend .sq{border-radius:2px}
+.legend .ramp{display:inline-block;width:64px;height:10px;border-radius:5px;
+  vertical-align:-1px;margin-right:6px;
+  background:linear-gradient(90deg,var(--seq-100),var(--seq-400),var(--seq-700))}
+
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+@media (max-width:860px){.charts{grid-template-columns:1fr}}
+.card{background:var(--surface-1);border:1px solid var(--ring);border-radius:12px;padding:14px 16px}
+.card h2{font-size:15px;margin:0 0 2px;font-weight:600}
+.card .note{color:var(--ink-3);font-size:12.5px;margin:0 0 10px}
+svg text{font:11.5px system-ui,-apple-system,sans-serif;fill:var(--ink-3)}
+svg .lab{fill:var(--ink-2);font-variant-numeric:tabular-nums}
+svg .direct{fill:var(--ink-2);font-weight:600}
+
+.tooltip{position:fixed;pointer-events:none;background:var(--surface-1);color:var(--ink-1);
+  border:1px solid var(--ring);border-radius:8px;padding:7px 10px;font-size:12.5px;
+  box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:2000;display:none;max-width:260px}
+.tooltip b{font-variant-numeric:tabular-nums}
+
+details.tbl{margin-top:16px}
+details.tbl summary{cursor:pointer;color:var(--ink-2);font-size:14px}
+table{border-collapse:collapse;width:100%;margin-top:10px;font-size:13px;background:var(--surface-1)}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--grid)}
+th{color:var(--ink-2);font-weight:600}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+td.bad{color:var(--st-critical);font-weight:600}
+
+.method{margin-top:22px;color:var(--ink-2);font-size:13.5px;
+  background:var(--surface-1);border:1px solid var(--ring);border-radius:12px;padding:14px 18px}
+.method h2{font-size:15px;color:var(--ink-1)}
+.method a{color:var(--s-atm)}
+.leaflet-popup-content{font:13px system-ui,sans-serif}
+.leaflet-container{font:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Every HDB block vs the nearest DBS/POSB ATM</h1>
+  <button id="themeBtn" aria-label="Toggle dark mode">◐ theme</button>
+</header>
+<p class="sub">On 25 Jun 2026 the <a href="https://abs.org.sg/docs/library/singapore-banks-come-together-to-help-seniors-plan-well-age-well-and-ease-the-burden-on-their-loved-ones.pdf">Association of Banks in Singapore</a>
+committed to an ATM, branch or NETS cashpoint within 500&#8202;m (straight-line) of every HDB block by end-2027.
+This map shows how far every HDB block is from the nearest <b>DBS/POSB</b> cash point today — one bank group's network, so a lower bound on industry coverage.</p>
+
+<div class="tiles" id="tiles"></div>
+
+<div class="filters" id="filters">
+  <span class="seg" id="modeSeg" role="group" aria-label="Colour mode">
+    <button data-m="status" class="on">Gaps</button><button data-m="heat">Distance heat</button>
+  </span>
+  <label><input type="checkbox" id="fBranch" checked> count branches as coverage</label>
+  <label><input type="checkbox" id="fCircles"> ATM 500&#8202;m circles</label>
+  <label><input type="checkbox" id="fOnlyGaps"> show gap blocks only</label>
+  <label>area <select id="fArea"><option value="">all</option></select></label>
+</div>
+
+<div id="map"></div>
+<div class="legend" id="legend"></div>
+
+<div class="charts">
+  <div class="card">
+    <h2>How far is the nearest DBS/POSB ATM?</h2>
+    <p class="note">HDB blocks by straight-line distance; red bins breach the 500&#8202;m commitment</p>
+    <div id="hist"></div>
+  </div>
+  <div class="card">
+    <h2>Where the gaps are</h2>
+    <p class="note">Blocks &gt;500&#8202;m from a DBS/POSB cash point, by postal area</p>
+    <div id="areas"></div>
+  </div>
+</div>
+
+<details class="tbl">
+  <summary>Table: 50 worst-served HDB blocks</summary>
+  <div style="overflow-x:auto"><table id="worst"></table></div>
+</details>
+
+<div class="method">
+  <h2>Method & caveats</h2>
+  <ul>
+    <li><b>What the commitment actually says:</b> DBS, OCBC, UOB <i>and</i> NETS jointly — an ATM, <i>bank branch or NETS cashpoint</i> (cash-back at participating merchants) within 500&#8202;m of every HDB block by <b>end-2027</b>; near transport hubs, NEA hawker centres and major supermarkets (FairPrice, Sheng Siong, Cold Storage, Giant) by <b>end-2026</b>. Distance is straight-line, per the ABS release.</li>
+    <li><b>This map underestimates coverage</b>: it shows DBS/POSB machines and branches only — no OCBC/UOB ATMs, no NETS cashpoints. A red block here may already be served by another bank.</li>
+    <li>Straight-line ≠ walking distance: 500&#8202;m as the crow flies can be a much longer walk (roads, canals, expressways).</li>
+    <li>HDB blocks: <a href="https://data.gov.sg/datasets/d_16b157c52ed637edd6ba1232e026258d/view">HDB Existing Building</a> footprints (data.gov.sg), building centroids; includes all HDB buildings (some are carparks/commercial).</li>
+    <li>ATM/branch locations: DBS branch-locator public content API; "ATM" = cash-withdrawal machines (ATM, talking ATM, cash recycler). Deposit-only machines and AXS kiosks are excluded.</li>
+    <li>Generated <span id="genDate"></span>. Code &amp; data: <a id="repoLink" href="#">GitHub</a>.</li>
+  </ul>
+</div>
+</div>
+
+<div class="tooltip" id="tt"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => n.toLocaleString('en-SG');
+
+/* ---------- theme ---------- */
+const root = document.documentElement;
+function curTheme(){
+  return root.dataset.theme ||
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
+$('#themeBtn').onclick = () => {
+  root.dataset.theme = curTheme() === 'dark' ? 'light' : 'dark';
+  setTiles(); drawCharts(); restyleMap();
+};
+
+/* ---------- state ---------- */
+let BLOCKS = [], ATMS = [], SUM = {};
+// block row: [postal, blk, lat, lon, dAtm, dAny, street, town, units, nearestName]
+const S = { mode:'status', useBranch:true, circles:false, onlyGaps:false, area:'' };
+
+const AREA = p => {
+  const s = (p||'').slice(0,2);
+  return SECTORS[s] || 'Other';
+};
+const SECTORS = {"01":"Raffles/Marina","02":"Raffles/Marina","03":"Raffles/Marina","04":"Harbourfront","05":"Harbourfront","06":"Raffles/Marina","07":"Bugis/Rochor","08":"Little India","09":"Orchard/River Valley","10":"Orchard/River Valley","11":"Chinatown/Outram","12":"Balestier/Toa Payoh","13":"Balestier/Toa Payoh","14":"Queenstown/Tiong Bahru","15":"Queenstown/Tiong Bahru","16":"Queenstown/Tiong Bahru","17":"Bukit Merah","18":"Bukit Merah","19":"Tanglin/Holland","20":"Ang Mo Kio/Bishan","21":"Clementi/West Coast","22":"Jurong","23":"Jurong","24":"Lim Chu Kang","25":"Kranji/Woodgrove","26":"Upper Thomson","27":"Yishun/Sembawang","28":"Seletar","29":"Novena/Thomson","30":"Novena/Thomson","31":"Toa Payoh/Serangoon","32":"Toa Payoh/Serangoon","33":"Toa Payoh/Serangoon","34":"Macpherson/Potong Pasir","35":"Macpherson/Potong Pasir","36":"Macpherson/Potong Pasir","37":"Macpherson/Potong Pasir","38":"Geylang/Eunos","39":"Geylang/Eunos","40":"Geylang/Eunos","41":"Geylang/Eunos","42":"Katong/Joo Chiat","43":"Katong/Joo Chiat","44":"Katong/Joo Chiat","45":"Katong/Joo Chiat","46":"Bedok/Upper East Coast","47":"Bedok/Upper East Coast","48":"Bedok/Upper East Coast","49":"Loyang/Changi","50":"Loyang/Changi","51":"Tampines/Pasir Ris","52":"Tampines/Pasir Ris","53":"Serangoon Gdn/Hougang","54":"Serangoon Gdn/Hougang","55":"Serangoon Gdn/Hougang","56":"Ang Mo Kio/Bishan","57":"Ang Mo Kio/Bishan","58":"Bukit Timah/Ulu Pandan","59":"Bukit Timah/Ulu Pandan","60":"Jurong","61":"Jurong","62":"Jurong","63":"Jurong","64":"Jurong","65":"Bukit Panjang/CCK","66":"Bukit Panjang/CCK","67":"Bukit Panjang/CCK","68":"Bukit Panjang/CCK","69":"Lim Chu Kang/Tengah","70":"Lim Chu Kang/Tengah","71":"Lim Chu Kang/Tengah","72":"Kranji/Woodgrove","73":"Kranji/Woodgrove","75":"Yishun/Sembawang","76":"Yishun/Sembawang","77":"Seletar","78":"Seletar","79":"Serangoon Gdn/Hougang","80":"Serangoon Gdn/Hougang","81":"Loyang/Changi","82":"Punggol/Sengkang"};
+
+const dist = b => S.useBranch ? b[5] : b[4];
+const isGap = b => dist(b) > 500;
+
+/* ---------- map ---------- */
+let map, tileLayer, blockLayer, atmLayer, circleLayer;
+const TILES = {
+  light:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'},
+  dark:{url:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'}
+};
+const ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+function css(v){ return getComputedStyle(root).getPropertyValue(v).trim(); }
+function heatColor(d){
+  const stops = [[0,'--seq-100'],[150,'--seq-250'],[300,'--seq-400'],[450,'--seq-550'],[600,'--seq-700']];
+  for (let i = stops.length-1; i >= 0; i--) if (d >= stops[i][0]) return css(stops[i][1]);
+  return css('--seq-100');
+}
+function blockStyle(b){
+  const d = dist(b);
+  if (S.mode === 'heat') return {color:heatColor(d), r:3.5};
+  if (d > 500)  return {color:css('--st-critical'), r:5};
+  if (d > 400)  return {color:css('--st-serious'), r:3.5};
+  return {color:css('--seq-250'), r:2.5};
+}
+
+function initMap(){
+  map = L.map('map', {preferCanvas:true}).setView([1.3521,103.8198], 12);
+  tileLayer = L.tileLayer(TILES[curTheme()].url, {attribution:ATTR, maxZoom:19}).addTo(map);
+  blockLayer = L.layerGroup().addTo(map);
+  atmLayer = L.layerGroup().addTo(map);
+  circleLayer = L.layerGroup();
+  drawAtms(); drawBlocks();
+}
+
+function drawAtms(){
+  atmLayer.clearLayers();
+  const atmC = css('--s-atm'), brC = css('--s-branch');
+  for (const a of ATMS){
+    if (a.cat === 'other') continue;
+    const isBr = a.cat === 'branch';
+    const m = isBr
+      ? L.marker([a.lat, a.lon], {icon: L.divIcon({className:'',
+          html:`<div style="width:10px;height:10px;background:${brC};border:2px solid #fff;border-radius:2px;box-shadow:0 0 3px rgba(0,0,0,.4)"></div>`,
+          iconSize:[14,14], iconAnchor:[7,7]})})
+      : L.circleMarker([a.lat, a.lon], {radius:4.5, color:'#fff', weight:1.5,
+          fillColor:atmC, fillOpacity:1});
+    m.bindPopup(`<b>${a.name}</b><br>${a.addr}<br>` +
+      `<span style="color:${isBr?brC:atmC}">●</span> ${isBr?'DBS/POSB branch':'ATM (cash withdrawal)'}` +
+      (a.svc?.length ? `<br><small>${a.svc.join(', ')}</small>` : ''));
+    m.addTo(atmLayer);
+  }
+}
+
+function drawBlocks(){
+  blockLayer.clearLayers();
+  for (const b of BLOCKS){
+    if (S.area && AREA(b[0]) !== S.area) continue;
+    if (S.onlyGaps && !isGap(b)) continue;
+    const st = blockStyle(b);
+    const m = L.circleMarker([b[2], b[3]], {radius:st.r, stroke:false,
+      fillColor:st.color, fillOpacity:S.mode==='heat'?0.85:(isGap(b)?0.95:0.6)});
+    m.bindPopup(
+      `<b>Blk ${b[1]}${b[6] ? ' ' + b[6] : ''}</b>` +
+      (b[0] ? `<br>S(${b[0]}) · ${AREA(b[0])}` : '') +
+      `<br>nearest ATM: <b>${fmt(b[4])} m</b>${b[9] ? ' — ' + b[9] : ''}` +
+      (b[5] !== b[4] ? `<br>nearest ATM/branch: <b>${fmt(b[5])} m</b>` : '') +
+      (isGap(b) ? `<br><span style="color:${css('--st-critical')}">▲ beyond the 500 m commitment</span>` : ''));
+    m.addTo(blockLayer);
+  }
+  drawCircles();
+}
+
+function drawCircles(){
+  circleLayer.clearLayers();
+  if (!S.circles){ map.removeLayer(circleLayer); return; }
+  const atmC = css('--s-atm'), brC = css('--s-branch');
+  for (const a of ATMS){
+    if (a.cat === 'other') continue;
+    if (a.cat === 'branch' && !S.useBranch) continue;
+    L.circle([a.lat, a.lon], {radius:500, weight:1,
+      color:a.cat==='branch'?brC:atmC, opacity:.35,
+      fillColor:a.cat==='branch'?brC:atmC, fillOpacity:.07}).addTo(circleLayer);
+  }
+  circleLayer.addTo(map);
+}
+
+function restyleMap(){
+  tileLayer.setUrl(TILES[curTheme()].url);
+  drawAtms(); drawBlocks(); drawLegend();
+}
+
+function drawLegend(){
+  const l = $('#legend');
+  if (S.mode === 'heat'){
+    l.innerHTML =
+      `<span><span class="ramp"></span>block: distance to nearest ${S.useBranch?'cash point':'ATM'} (0 → 900 m+)</span>` +
+      `<span><span class="sw" style="background:${css('--s-atm')}"></span>DBS/POSB ATM</span>` +
+      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>`;
+  } else {
+    l.innerHTML =
+      `<span><span class="sw" style="background:${css('--st-critical')}"></span>▲ block &gt;500 m (gap)</span>` +
+      `<span><span class="sw" style="background:${css('--st-serious')}"></span>400–500 m (at the limit)</span>` +
+      `<span><span class="sw" style="background:${css('--seq-250')}"></span>covered ≤400 m</span>` +
+      `<span><span class="sw" style="background:${css('--s-atm')}"></span>DBS/POSB ATM</span>` +
+      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>`;
+  }
+}
+
+/* ---------- tiles ---------- */
+function setTiles(){
+  const gaps = BLOCKS.filter(isGap).length;
+  const pct = (100*(BLOCKS.length-gaps)/BLOCKS.length).toFixed(1);
+  const worst = BLOCKS.reduce((a,b)=>dist(b)>dist(a)?b:a, BLOCKS[0]);
+  $('#tiles').innerHTML = [
+    [fmt(BLOCKS.length), 'HDB blocks (all HDB buildings)'],
+    [fmt(SUM.atm_sites), 'DBS/POSB ATM locations'],
+    [fmt(SUM.branches), 'DBS/POSB branches'],
+    [fmt(gaps), `blocks >500 m from ${S.useBranch?'ATM/branch':'an ATM'}`, gaps>0],
+    [pct + '%', 'blocks within 500 m'],
+    [fmt(dist(worst)) + ' m', `worst: Blk ${worst[1]} ${worst[6]||('S('+worst[0]+')')}`],
+  ].map(([v,k,bad]) => `<div class="tile"><div class="v${bad?' bad':''}">${v}</div><div class="k">${k}</div></div>`).join('');
+}
+
+/* ---------- charts (plain SVG) ---------- */
+const tt = $('#tt');
+function showTT(html, x, y){
+  tt.innerHTML = html; tt.style.display = 'block';
+  tt.style.left = Math.min(x+14, innerWidth-280) + 'px';
+  tt.style.top = (y+14) + 'px';
+}
+function hideTT(){ tt.style.display = 'none'; }
+
+function drawCharts(){ drawHist(); drawAreas(); drawTable(); }
+
+function drawHist(){
+  const el = $('#hist'), W = el.clientWidth || 520, H = 220,
+        m = {t:14, r:8, b:26, l:8};
+  const BIN = 100, MAX = 900;
+  const bins = Array(MAX/BIN + 1).fill(0);
+  for (const b of BLOCKS) bins[Math.min(Math.floor(dist(b)/BIN), MAX/BIN)]++;
+  const bw = (W-m.l-m.r)/bins.length, ymax = Math.max(...bins);
+  const yy = v => m.t + (H-m.t-m.b)*(1-v/ymax);
+  let s = `<svg width="${W}" height="${H}" role="img" aria-label="Histogram of block distances">`;
+  bins.forEach((v,i)=>{
+    const gap = i*BIN >= 500;
+    const c = gap ? css('--st-critical') : css('--seq-400');
+    const x = m.l+i*bw, y = yy(v), h = H-m.b-y;
+    s += `<rect data-i="${i}" x="${x+1}" y="${y}" width="${bw-2}" height="${Math.max(h,0)}"
+           rx="3" fill="${c}"></rect>`;
+    if (gap && v>0) s += `<text class="direct" x="${x+bw/2}" y="${y-4}" text-anchor="middle">${v}</text>`;
+  });
+  s += `<line x1="${m.l}" y1="${H-m.b}" x2="${W-m.r}" y2="${H-m.b}" stroke="${css('--baseline')}"/>`;
+  for (let d=0; d<MAX; d+=300)
+    s += `<text x="${m.l+d/BIN*bw}" y="${H-8}" text-anchor="middle">${d}m</text>`;
+  s += `<text x="${W-m.r}" y="${H-8}" text-anchor="end">${MAX}m+</text></svg>`;
+  el.innerHTML = s;
+  el.querySelectorAll('rect').forEach(r=>{
+    r.addEventListener('mousemove', e=>{
+      const i = +r.dataset.i, lo = i*BIN, hi = lo+BIN;
+      showTT(`<b>${fmt(bins[i])}</b> blocks ${i===bins.length-1?`≥${lo}m`:`${lo}–${hi}m`} from nearest ${S.useBranch?'cash point':'ATM'}`, e.clientX, e.clientY);
+    });
+    r.addEventListener('mouseleave', hideTT);
+  });
+}
+
+function drawAreas(){
+  const el = $('#areas'), W = el.clientWidth || 520;
+  const counts = {};
+  for (const b of BLOCKS) if (isGap(b)) counts[AREA(b[0])] = (counts[AREA(b[0])]||0)+1;
+  const top = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const rowH = 24, m = {t:4, r:44, b:4, l:150}, H = m.t+m.b+top.length*rowH;
+  const xmax = Math.max(...top.map(t=>t[1]), 1);
+  let s = `<svg width="${W}" height="${H}" role="img" aria-label="Gap blocks by area">`;
+  top.forEach(([name,v],i)=>{
+    const y = m.t+i*rowH, w = (W-m.l-m.r)*v/xmax;
+    s += `<text x="${m.l-8}" y="${y+rowH/2+4}" text-anchor="end" class="lab">${name}</text>
+          <rect data-a="${name}" data-v="${v}" x="${m.l}" y="${y+4}" width="${Math.max(w,2)}" height="${rowH-8}" rx="3" fill="${css('--seq-400')}"></rect>
+          <text x="${m.l+w+6}" y="${y+rowH/2+4}" class="lab">${v}</text>`;
+  });
+  s += `<line x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${H-m.b}" stroke="${css('--baseline')}"/></svg>`;
+  el.innerHTML = s;
+  el.querySelectorAll('rect').forEach(r=>{
+    r.addEventListener('mousemove', e=>showTT(`<b>${r.dataset.v}</b> gap blocks in ${r.dataset.a} — click to zoom`, e.clientX, e.clientY));
+    r.addEventListener('mouseleave', hideTT);
+    r.addEventListener('click', ()=>{ $('#fArea').value = r.dataset.a; S.area = r.dataset.a; drawBlocks(); zoomArea(); });
+  });
+}
+
+function zoomArea(){
+  const pts = BLOCKS.filter(b=>!S.area || AREA(b[0])===S.area);
+  if (pts.length) map.fitBounds(pts.map(b=>[b[2],b[3]]), {padding:[30,30]});
+}
+
+function drawTable(){
+  const worst = [...BLOCKS].sort((a,b)=>dist(b)-dist(a)).slice(0,50);
+  $('#worst').innerHTML =
+    `<tr><th>Block</th><th>Postal</th><th>Area</th><th style="text-align:right">Nearest ATM</th><th style="text-align:right">ATM/branch</th><th>Nearest ATM site</th></tr>` +
+    worst.map(b=>`<tr><td>Blk ${b[1]} ${b[6]||''}</td><td>${b[0]}</td><td>${AREA(b[0])}</td>
+      <td class="num bad">${fmt(b[4])} m</td><td class="num">${fmt(b[5])} m</td><td>${b[9]||''}</td></tr>`).join('');
+}
+
+/* ---------- filters ---------- */
+$('#modeSeg').addEventListener('click', e=>{
+  if (e.target.tagName !== 'BUTTON') return;
+  S.mode = e.target.dataset.m;
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on', b===e.target));
+  drawBlocks(); drawLegend();
+});
+$('#fBranch').onchange = e=>{ S.useBranch = e.target.checked; setTiles(); drawBlocks(); drawCharts(); drawLegend(); };
+$('#fCircles').onchange = e=>{ S.circles = e.target.checked; drawCircles(); };
+$('#fOnlyGaps').onchange = e=>{ S.onlyGaps = e.target.checked; drawBlocks(); };
+$('#fArea').onchange = e=>{ S.area = e.target.value; drawBlocks(); zoomArea(); };
+
+/* ---------- boot ---------- */
+Promise.all(['data/blocks.json','data/atms.json','data/summary.json'].map(u=>fetch(u).then(r=>r.json())))
+.then(([blocks, atms, sum])=>{
+  BLOCKS = blocks; ATMS = atms; SUM = sum;
+  $('#genDate').textContent = sum.generated;
+  const areas = [...new Set(BLOCKS.map(b=>AREA(b[0])))].sort();
+  $('#fArea').innerHTML = '<option value="">all</option>' + areas.map(a=>`<option>${a}</option>`).join('');
+  setTiles(); initMap(); drawLegend(); drawCharts();
+  addEventListener('resize', ()=>{ clearTimeout(window.__rt); window.__rt = setTimeout(drawCharts, 200); });
+})
+.catch(e=>{
+  $('#tiles').innerHTML = `<div class="tile"><div class="k">Failed to load data (${e}). If opened as a local file, serve the folder instead: <code>python3 -m http.server</code></div></div>`;
+});
+</script>
+</body>
+</html>
