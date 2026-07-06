@@ -15,6 +15,7 @@
   --s-atm:#2a78d6; --s-branch:#1baf7a;
   --seq-100:#cde2fb; --seq-250:#86b6ef; --seq-400:#3987e5; --seq-550:#1c5cab; --seq-700:#0d366b;
   --st-serious:#ec835a; --st-critical:#d03b3b;
+  --blk-covered:#b3b1a9;
   --tile-filter:none;
 }
 :root[data-theme="dark"]{
@@ -23,6 +24,7 @@
   --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
   --s-atm:#3987e5; --s-branch:#199e70;
   --seq-100:#0d366b; --seq-250:#184f95; --seq-400:#256abf; --seq-550:#5598e7; --seq-700:#9ec5f4;
+  --blk-covered:#55554f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -31,6 +33,7 @@
     --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,.10);
     --s-atm:#3987e5; --s-branch:#199e70;
     --seq-100:#0d366b; --seq-250:#184f95; --seq-400:#256abf; --seq-550:#5598e7; --seq-700:#9ec5f4;
+    --blk-covered:#55554f;
   }
 }
 *{box-sizing:border-box}
@@ -208,9 +211,9 @@ function heatColor(d){
 function blockStyle(b){
   const d = dist(b);
   if (S.mode === 'heat') return {color:heatColor(d), r:3.5};
-  if (d > 500)  return {color:css('--st-critical'), r:5};
-  if (d > 400)  return {color:css('--st-serious'), r:3.5};
-  return {color:css('--seq-250'), r:2.5};
+  if (d > 500)  return {color:css('--st-critical'), r:6.5};
+  if (d > 400)  return {color:css('--st-serious'), r:4};
+  return {color:css('--blk-covered'), r:2.5};
 }
 
 function initMap(){
@@ -232,7 +235,7 @@ function drawAtms(){
       ? L.marker([a.lat, a.lon], {icon: L.divIcon({className:'',
           html:`<div style="width:10px;height:10px;background:${brC};border:2px solid #fff;border-radius:2px;box-shadow:0 0 3px rgba(0,0,0,.4)"></div>`,
           iconSize:[14,14], iconAnchor:[7,7]})})
-      : L.circleMarker([a.lat, a.lon], {radius:4.5, color:'#fff', weight:1.5,
+      : L.circleMarker([a.lat, a.lon], {radius:6, color:'#fff', weight:1.5,
           fillColor:atmC, fillOpacity:1});
     m.bindPopup(`<b>${a.name}</b><br>${a.addr}<br>` +
       `<span style="color:${isBr?brC:atmC}">●</span> ${isBr?'DBS/POSB branch':'ATM (cash withdrawal)'}` +
@@ -246,6 +249,7 @@ function drawBlocks(){
   for (const b of BLOCKS){
     if (S.area && AREA(b[0]) !== S.area) continue;
     if (S.onlyGaps && !isGap(b)) continue;
+    if (S.mode === 'status' && dist(b) <= 400) continue; // covered blocks stay invisible
     const st = blockStyle(b);
     const m = L.circleMarker([b[2], b[3]], {radius:st.r, stroke:false,
       fillColor:st.color, fillOpacity:S.mode==='heat'?0.85:(isGap(b)?0.95:0.6)});
@@ -290,9 +294,9 @@ function drawLegend(){
     l.innerHTML =
       `<span><span class="sw" style="background:${css('--st-critical')}"></span>▲ block &gt;500 m (gap)</span>` +
       `<span><span class="sw" style="background:${css('--st-serious')}"></span>400–500 m (at the limit)</span>` +
-      `<span><span class="sw" style="background:${css('--seq-250')}"></span>covered ≤400 m</span>` +
       `<span><span class="sw" style="background:${css('--s-atm')}"></span>DBS/POSB ATM</span>` +
-      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>`;
+      `<span><span class="sw sq" style="background:${css('--s-branch')}"></span>branch</span>` +
+      `<span style="color:var(--ink-3)">covered blocks (≤400 m) hidden — use “Distance heat” to see all</span>`;
   }
 }
 
